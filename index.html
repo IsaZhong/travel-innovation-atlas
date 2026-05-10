@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Global Travel Innovation Atlas — UN Tourism</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -140,6 +140,55 @@
       transition: background 0.2s;
     }
     #ic-website:hover { background: #007ab8; }
+
+    /* ── LEGEND TOGGLE (mobile only, hidden on desktop) ── */
+    #legend-toggle-bar {
+      display: none;
+      align-items: center; justify-content: space-between;
+      padding: 10px 16px; cursor: pointer; user-select: none;
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      color: rgba(255,255,255,0.75); text-transform: uppercase;
+    }
+    #legend-toggle-bar:active { background: rgba(255,255,255,0.06); }
+    #legend-toggle-icon { font-size: 14px; opacity: 0.6; }
+
+    /* ── MOBILE ──────────────────────────────────────── */
+    @media (max-width: 768px) {
+      /* Globe title */
+      #globe-title { top: 12px; left: 12px; }
+      #globe-title h2 { font-size: 15px; }
+      #globe-title p  { font-size: 9px; display: none; }
+
+      /* Legend - collapsible */
+      #globe-legend { top: 12px; right: 12px; min-width: 0; padding: 0; border-radius: 4px; }
+      #legend-toggle-bar { display: flex; }
+      #legend-inner { display: none; padding: 10px 16px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+      #legend-inner.open { display: block; }
+      .legend-row { padding: 7px 6px; }
+
+      /* Info card - full-width bottom sheet */
+      #info-card {
+        left: 0 !important; right: 0 !important;
+        bottom: 0 !important; top: auto !important;
+        width: 100%; border-radius: 16px 16px 0 0;
+        overflow: hidden;
+        transform: translateY(100%); opacity: 1;
+        transition: transform 0.3s ease;
+        box-shadow: 0 -8px 40px rgba(0,0,0,0.7);
+      }
+      #info-card.visible { transform: translateY(0); opacity: 1; }
+      #ic-handle { cursor: default; }
+      .ic-grip { display: none; }
+      .ic-body { max-height: 55vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+      /* Intro panel */
+      #intro-panel { padding: 28px 20px; }
+      #intro-panel h1 { font-size: 20px; }
+      .intro-legend { grid-template-columns: 1fr; gap: 5px; }
+      .desktop-hint { display: none; }
+      .mobile-hint  { display: inline; }
+    }
+    .mobile-hint { display: none; }
   </style>
 
   <script src="https://js.arcgis.com/4.22/"></script>
@@ -163,6 +212,7 @@
   /* shared reference so filter can reach the layer from DOMContentLoaded scope */
   let layerRef = null;
   const activeCategories = new Set(CATEGORIES.map(c => c.name));
+  const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth <= 768;
 
   function applyFilter() {
     if (!layerRef) return;
@@ -220,12 +270,23 @@
       CATEGORIES.forEach(c => activeCategories.add(c.name));
       applyFilter();
     });
+
+    document.getElementById("legend-toggle-bar").addEventListener("click", function () {
+      const inner = document.getElementById("legend-inner");
+      const icon  = document.getElementById("legend-toggle-icon");
+      const isOpen = inner.classList.toggle("open");
+      icon.textContent = isOpen ? "▾" : "▸";
+    });
   });
 
   /* ═══════════════════════════════════════════════
      DRAGGABLE CARD LOGIC
   ═══════════════════════════════════════════════ */
   function initDraggable() {
+    if (isMobile) {
+      document.getElementById("ic-close").addEventListener("click", hideCard);
+      return;
+    }
     const card   = document.getElementById("info-card");
     const handle = document.getElementById("ic-handle");
     let drag = false, ox = 0, oy = 0;
@@ -272,7 +333,9 @@
     const card = document.getElementById("info-card");
     card.classList.remove("visible");
     card.style.left = ""; card.style.top = "";
-    card.style.right = "32px"; card.style.bottom = "64px";
+    if (!isMobile) {
+      card.style.right = "32px"; card.style.bottom = "64px";
+    }
   }
 
   /* ═══════════════════════════════════════════════
@@ -295,8 +358,8 @@
             type: "icon",
             resource: { primitive: "circle" },
             material: { color: c.color },
-            outline: { color: [255, 255, 255, 0.8], size: 1.8 },
-            size: 16
+            outline: { color: [255, 255, 255, 0.8], size: isMobile ? 2.5 : 1.8 },
+            size: isMobile ? 26 : 16
           }]
         }
       }))
@@ -348,24 +411,40 @@
 
     view.whenLayerView(layer).then(function (lv) {
       let hl = null;
-      view.on("pointer-move", function (evt) {
-        view.hitTest(evt).then(function (res) {
-          const hits = res.results.filter(r => r.graphic.layer === layer);
-          if (hl) { hl.remove(); hl = null; }
 
-          if (hits.length > 0) {
-            const g = hits[0].graphic;
-            hovered = g;
-            hl = lv.highlight(g);
-            document.getElementById("viewDiv").style.cursor = "pointer";
-            showCard(g.attributes);
-          } else {
-            hovered = null;
-            document.getElementById("viewDiv").style.cursor = "default";
-            /* card stays visible — user can read and drag it */
-          }
+      if (isMobile) {
+        /* Mobile: tap a dot to show card instantly */
+        view.on("click", function (evt) {
+          view.hitTest(evt).then(function (res) {
+            const hits = res.results.filter(r => r.graphic.layer === layer);
+            if (hl) { hl.remove(); hl = null; }
+            if (hits.length > 0) {
+              const g = hits[0].graphic;
+              hl = lv.highlight(g);
+              showCard(g.attributes);
+            }
+          });
         });
-      });
+      } else {
+        /* Desktop: hover to preview card */
+        view.on("pointer-move", function (evt) {
+          view.hitTest(evt).then(function (res) {
+            const hits = res.results.filter(r => r.graphic.layer === layer);
+            if (hl) { hl.remove(); hl = null; }
+            if (hits.length > 0) {
+              const g = hits[0].graphic;
+              hovered = g;
+              hl = lv.highlight(g);
+              document.getElementById("viewDiv").style.cursor = "pointer";
+              showCard(g.attributes);
+            } else {
+              hovered = null;
+              document.getElementById("viewDiv").style.cursor = "default";
+              /* card stays visible — user can read and drag it */
+            }
+          });
+        });
+      }
     });
 
     document.getElementById("explore-btn").addEventListener("click", function () {
@@ -410,7 +489,7 @@
       <div class="intro-legend" id="intro-legend"></div>
 
       <button id="explore-btn">Explore the Globe</button>
-      <p class="intro-hint">Hover over markers · Drag the info card · Click to visit websites</p>
+      <p class="intro-hint"><span class="desktop-hint">Hover over markers · Drag the card ·</span><span class="mobile-hint">Tap markers to explore ·</span> Click to visit websites</p>
     </div>
   </div>
 
@@ -449,10 +528,16 @@
       <p>127 companies &nbsp;·&nbsp; 50 countries &nbsp;·&nbsp; 6 continents</p>
     </div>
     <div id="globe-legend">
-      <div class="legend-heading">Innovation Category</div>
-      <div class="legend-hint">Click to filter</div>
-      <div id="globe-legend-rows"></div>
-      <div id="legend-reset">Show All</div>
+      <div id="legend-toggle-bar">
+        <span>Categories</span>
+        <span id="legend-toggle-icon">▸</span>
+      </div>
+      <div id="legend-inner">
+        <div class="legend-heading">Innovation Category</div>
+        <div class="legend-hint">Click to filter</div>
+        <div id="globe-legend-rows"></div>
+        <div id="legend-reset">Show All</div>
+      </div>
     </div>
     <div id="globe-footer">
       127 Travel Innovators &nbsp;·&nbsp; 6 Continents &nbsp;·&nbsp; Reshaping Global Tourism
