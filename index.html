@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1" />
+  <title>Global Travel Innovation Atlas — UN Tourism</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://js.arcgis.com/4.22/esri/themes/dark/main.css" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --un-blue: #009EDB;
+      --un-gold: #F4A900;
+    }
+    html, body, #viewDiv {
+      padding: 0; margin: 0; height: 100%; width: 100%;
+      overflow: hidden; background: #000D1A;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    /* ── INTRO ─────────────────────────────────────── */
+    #intro-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: linear-gradient(145deg, #000D1A 0%, #001f4d 55%, #000D1A 100%);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.9s ease;
+    }
+    #intro-overlay.fade-out { opacity: 0; pointer-events: none; }
+
+    #intro-panel {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(24px);
+      border-radius: 3px; padding: 44px 48px;
+      max-width: 520px; width: 92%;
+      text-align: center; color: white;
+    }
+    .un-header {
+      display: flex; align-items: center;
+      justify-content: center; gap: 14px; margin-bottom: 28px;
+    }
+    .un-globe-svg { width: 44px; height: 44px; flex-shrink: 0; }
+    .un-text-left { text-align: left; line-height: 1.3; }
+    .un-org  { font-size: 8.5px; font-weight: 700; letter-spacing: 2.5px; color: rgba(255,255,255,0.45); text-transform: uppercase; }
+    .un-dept { font-size: 13px;  font-weight: 700; letter-spacing: 1.5px; color: var(--un-blue); text-transform: uppercase; }
+    .gold-bar { width: 48px; height: 2px; background: var(--un-gold); margin: 0 auto 22px; }
+    #intro-panel h1 { margin: 0 0 10px; font-size: 26px; font-weight: 300; letter-spacing: 2.5px; text-transform: uppercase; }
+    .intro-sub { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.65; margin-bottom: 28px; }
+    .intro-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 28px; text-align: left; }
+    .intro-legend-item { display: flex; align-items: center; gap: 9px; font-size: 11.5px; color: rgba(255,255,255,0.75); }
+    .intro-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    #explore-btn {
+      background: var(--un-blue); color: white; border: none;
+      padding: 13px 44px; font-size: 11.5px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      cursor: pointer; border-radius: 2px;
+      font-family: 'Roboto', sans-serif;
+      transition: background 0.25s, transform 0.15s;
+    }
+    #explore-btn:hover { background: #007ab8; transform: translateY(-1px); }
+    .intro-hint { margin-top: 14px; font-size: 10.5px; color: rgba(255,255,255,0.3); letter-spacing: 0.8px; }
+
+    /* ── GLOBE HUD ──────────────────────────────────── */
+    #globe-ui { display: none; }
+    #globe-ui.visible { display: block; }
+
+    #globe-title { position: fixed; top: 28px; left: 28px; z-index: 100; pointer-events: none; }
+    .un-badge-tag { display: inline-block; background: var(--un-blue); color: white; font-size: 8px; font-weight: 700; letter-spacing: 2.5px; padding: 3px 9px; text-transform: uppercase; margin-bottom: 8px; }
+    #globe-title h2 { margin: 0 0 4px; color: white; font-size: 20px; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; }
+    #globe-title p  { margin: 0; font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.5px; }
+
+    #globe-legend { position: fixed; top: 28px; right: 28px; z-index: 100; background: rgba(0,13,26,0.78); border: 1px solid rgba(255,255,255,0.09); backdrop-filter: blur(12px); padding: 16px 20px; border-radius: 2px; min-width: 210px; }
+    .legend-heading { font-size: 8.5px; font-weight: 700; letter-spacing: 2px; color: rgba(255,255,255,0.35); text-transform: uppercase; margin-bottom: 4px; }
+    .legend-hint { font-size: 8.5px; color: rgba(255,255,255,0.2); letter-spacing: 0.3px; margin-bottom: 12px; }
+    .legend-row { display: flex; align-items: center; gap: 9px; font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 6px; cursor: pointer; user-select: none; border-radius: 3px; padding: 4px 6px; margin-left: -6px; margin-right: -6px; transition: opacity 0.18s, background 0.15s; }
+    .legend-row:last-child { margin-bottom: 0; }
+    .legend-row:hover { background: rgba(255,255,255,0.06); }
+    .legend-row.inactive { opacity: 0.22; }
+    .legend-row.inactive .legend-circle { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.18) !important; }
+    .legend-circle { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); flex-shrink: 0; transition: background 0.18s; }
+    #legend-reset { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--un-blue); cursor: pointer; text-align: center; display: none; }
+    #legend-reset:hover { color: white; }
+
+    #globe-footer { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 100; color: rgba(255,255,255,0.22); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; pointer-events: none; white-space: nowrap; }
+
+    /* ── DRAGGABLE INFO CARD ───────────────────────── */
+    #info-card {
+      position: fixed; right: 32px; bottom: 64px;
+      width: 340px; z-index: 500;
+      opacity: 0; transform: translateX(20px);
+      pointer-events: none;
+      transition: opacity 0.22s ease, transform 0.22s ease;
+      border-radius: 4px; overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    #info-card.visible { opacity: 1; transform: translateX(0); pointer-events: all; }
+
+    /* handle / drag bar */
+    #ic-handle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; height: 42px;
+      cursor: grab; user-select: none;
+      background: #009EDB; /* overridden per-company */
+    }
+    #ic-handle:active { cursor: grabbing; }
+    .ic-grip { display: flex; gap: 3px; opacity: 0.65; }
+    .ic-grip span { display: block; width: 3px; height: 3px; border-radius: 50%; background: white; }
+    .ic-category-label { font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.9); }
+    #ic-close { background: none; border: none; color: rgba(255,255,255,0.65); font-size: 16px; line-height: 1; cursor: pointer; padding: 4px; display: flex; align-items: center; }
+    #ic-close:hover { color: white; }
+
+    /* card body */
+    .ic-body { background: #0d1b2e; padding: 18px 20px 14px; }
+    .ic-name     { font-size: 20px; font-weight: 700; color: white; letter-spacing: -0.3px; margin-bottom: 3px; }
+    .ic-location { font-size: 11px; color: rgba(255,255,255,0.42); letter-spacing: 0.3px; margin-bottom: 14px; }
+    .ic-label    { font-size: 8.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.28); margin-bottom: 4px; }
+    .ic-tech-tag {
+      display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+      color: var(--un-blue); background: rgba(0,158,219,0.13);
+      border: 1px solid rgba(0,158,219,0.35); border-radius: 3px;
+      padding: 4px 10px; margin-bottom: 14px; line-height: 1.4; max-width: 100%;
+    }
+    .ic-text     { font-size: 13px; color: rgba(255,255,255,0.85); line-height: 1.65; }
+    .ic-impact-box { margin-top: 14px; border-left: 3px solid var(--un-blue); padding: 10px 12px; background: rgba(0,158,219,0.08); border-radius: 0 3px 3px 0; }
+    .ic-impact-label { font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--un-blue); margin-bottom: 5px; }
+    .ic-impact   { font-size: 12px; color: rgba(255,255,255,0.58); line-height: 1.55; }
+
+    /* card footer */
+    .ic-footer { background: #091525; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.06); }
+    .ic-sdg    { font-size: 9.5px; color: rgba(255,255,255,0.28); max-width: 160px; letter-spacing: 0.2px; }
+    #ic-website {
+      display: inline-block; background: var(--un-blue); color: white;
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-decoration: none; text-transform: uppercase;
+      padding: 6px 14px; border-radius: 2px; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    #ic-website:hover { background: #007ab8; }
+  </style>
+
+  <script src="https://js.arcgis.com/4.22/"></script>
+  <script>
+
+  /* ═══════════════════════════════════════════════
+     CATEGORY CONFIG  (matches "category" field in GeoJSON)
+  ═══════════════════════════════════════════════ */
+  const CATEGORIES = [
+    { name: "AI-Powered Booking",          color: [0,  153, 230, 1], hex: "#0099E6" },
+    { name: "Experiences & Activities",    color: [255,143, 0,  1],  hex: "#FF8F00" },
+    { name: "Accommodation & Hospitality", color: [255, 92, 92, 1],  hex: "#FF5C5C" },
+    { name: "Travel Tech Infrastructure",  color: [155, 38,175, 1],  hex: "#9B26AF" },
+    { name: "Regional Travel Platforms",   color: [255,186, 28, 1],  hex: "#FFB81C" },
+    { name: "Identity & Connectivity",     color: [100,149,237, 1],  hex: "#6495ED" },
+    { name: "Eco & Conservation Tourism",  color: [46, 204,113, 1],  hex: "#2ECC71" }
+  ];
+  const COLOR_MAP = {};
+  CATEGORIES.forEach(c => { COLOR_MAP[c.name] = c.hex; });
+
+  /* shared reference so filter can reach the layer from DOMContentLoaded scope */
+  let layerRef = null;
+  const activeCategories = new Set(CATEGORIES.map(c => c.name));
+
+  function applyFilter() {
+    if (!layerRef) return;
+    const reset = document.getElementById("legend-reset");
+    const allOn = activeCategories.size === CATEGORIES.length;
+    reset.style.display = allOn ? "none" : "block";
+
+    if (allOn) {
+      layerRef.definitionExpression = null;
+    } else if (activeCategories.size === 0) {
+      layerRef.definitionExpression = "1=0";
+    } else {
+      const vals = [...activeCategories].map(n => `'${n.replace(/'/g,"''")}'`).join(",");
+      layerRef.definitionExpression = `category IN (${vals})`;
+    }
+
+    document.querySelectorAll("#globe-legend-rows .legend-row").forEach(row => {
+      row.classList.toggle("inactive", !activeCategories.has(row.dataset.cat));
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     BUILD LEGENDS (intro + globe)
+  ═══════════════════════════════════════════════ */
+  window.addEventListener("DOMContentLoaded", function () {
+    const iL = document.getElementById("intro-legend");
+    const gL = document.getElementById("globe-legend-rows");
+    CATEGORIES.forEach(c => {
+      const a = document.createElement("div");
+      a.className = "intro-legend-item";
+      a.innerHTML = `<div class="intro-dot" style="background:${c.hex}"></div>${c.name}`;
+      iL.appendChild(a);
+
+      const b = document.createElement("div");
+      b.className = "legend-row";
+      b.dataset.cat = c.name;
+      b.innerHTML = `<div class="legend-circle" style="background:${c.hex}"></div>${c.name}`;
+      b.addEventListener("click", () => {
+        if (activeCategories.has(c.name)) {
+          /* clicking the only remaining active → reset all */
+          if (activeCategories.size === 1) {
+            CATEGORIES.forEach(cat => activeCategories.add(cat.name));
+          } else {
+            activeCategories.delete(c.name);
+          }
+        } else {
+          activeCategories.add(c.name);
+        }
+        applyFilter();
+      });
+      gL.appendChild(b);
+    });
+
+    document.getElementById("legend-reset").addEventListener("click", () => {
+      CATEGORIES.forEach(c => activeCategories.add(c.name));
+      applyFilter();
+    });
+  });
+
+  /* ═══════════════════════════════════════════════
+     DRAGGABLE CARD LOGIC
+  ═══════════════════════════════════════════════ */
+  function initDraggable() {
+    const card   = document.getElementById("info-card");
+    const handle = document.getElementById("ic-handle");
+    let drag = false, ox = 0, oy = 0;
+
+    function start(cx, cy) {
+      drag = true;
+      const r = card.getBoundingClientRect();
+      card.style.right = "auto"; card.style.bottom = "auto";
+      card.style.left = r.left + "px"; card.style.top = r.top + "px";
+      ox = cx - r.left; oy = cy - r.top;
+    }
+    function move(cx, cy) {
+      if (!drag) return;
+      card.style.left = (cx - ox) + "px";
+      card.style.top  = (cy - oy) + "px";
+    }
+    handle.addEventListener("mousedown",   e => { start(e.clientX, e.clientY); e.preventDefault(); });
+    document.addEventListener("mousemove", e => move(e.clientX, e.clientY));
+    document.addEventListener("mouseup",   () => { drag = false; });
+    handle.addEventListener("touchstart",  e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    document.addEventListener("touchmove", e => { const t = e.touches[0]; move(t.clientX, t.clientY); },  { passive: true });
+    document.addEventListener("touchend",  () => { drag = false; });
+
+    document.getElementById("ic-close").addEventListener("click", hideCard);
+  }
+
+  function showCard(a) {
+    const color = COLOR_MAP[a.category] || "#009EDB";
+    document.getElementById("ic-handle").style.background = color;
+    document.querySelector("#ic-handle .ic-category-label").textContent = a.category;
+    document.getElementById("ic-name").textContent     = a.name;
+    document.getElementById("ic-location").textContent = `📍 ${a.city}, ${a.country}  ·  Est. ${a.founded}`;
+    document.getElementById("ic-tech").textContent     = a.technology;
+    document.getElementById("ic-text").textContent     = a.innovation;
+    document.getElementById("ic-impact").textContent   = a.impact;
+    document.getElementById("ic-sdg").textContent      = a.sdg;
+    const link = document.getElementById("ic-website");
+    link.href = "https://" + a.website;
+    link.textContent = a.website;
+    document.getElementById("info-card").classList.add("visible");
+  }
+
+  function hideCard() {
+    const card = document.getElementById("info-card");
+    card.classList.remove("visible");
+    card.style.left = ""; card.style.top = "";
+    card.style.right = "32px"; card.style.bottom = "64px";
+  }
+
+  /* ═══════════════════════════════════════════════
+     ARCGIS APP
+  ═══════════════════════════════════════════════ */
+  require([
+    "esri/config", "esri/Map", "esri/views/SceneView", "esri/layers/GeoJSONLayer"
+  ], function (esriConfig, Map, SceneView, GeoJSONLayer) {
+
+    esriConfig.apiKey = "AAPTatJJu4kXWMhgPhNlDsRViDQ..o0zegYBRo1XFkIS6ODH7zm3bFFaz5qcJi7XCR1IX3FITvcHHpopnB04VhN2fViJTdDsgRFxxleCgT5ENuKnbS6nWz7E2TZdYwuFhZgt0wRlNzfyPiSKJ6IK8UWNTyNL_iC0JyhZLFhV4F_gJReE5mQxIdp5ccf2Uqk0TOWqMZ22gzExEHICvA7E9eM-dJ_Ywbz82z5_KslygcgJx3r_YM5jL8UfD8vG8eVaAjUKeTzJSpF412XnZl7-hVBiEAT1_OmS41L5A";
+
+    const renderer = {
+      type: "unique-value",
+      field: "category",
+      uniqueValueInfos: CATEGORIES.map(c => ({
+        value: c.name,
+        symbol: {
+          type: "point-3d",
+          symbolLayers: [{
+            type: "icon",
+            resource: { primitive: "circle" },
+            material: { color: c.color },
+            outline: { color: [255, 255, 255, 0.8], size: 1.8 },
+            size: 16
+          }]
+        }
+      }))
+    };
+
+    const map  = new Map({ basemap: "arcgis-dark-gray" });
+    const view = new SceneView({
+      container: "viewDiv",
+      map,
+      alphaCompositingEnabled: true,
+      /* tilt:0 → globe appears as a perfect sphere centered on screen */
+      camera: { position: [15, 10, 23000000], tilt: 0 },
+      environment: {
+        background: { type: "color", color: [0, 13, 26, 1] },
+        starsEnabled: true,
+        atmosphereEnabled: true
+      },
+      ui: { components: [] }
+    });
+    view.popup.autoOpenEnabled = false;
+
+    /* Data loaded from external GeoJSON file */
+    const layer = new GeoJSONLayer({
+      url: "./travel-innovations.geojson",
+      outFields: ["*"],
+      renderer,
+      /* pin markers exactly on the globe surface so they move with it at any zoom */
+      elevationInfo: { mode: "on-the-ground" },
+      /* prevent perspective rescaling during rotation — keeps icons stable */
+      screenSizePerspectiveEnabled: false
+    });
+    map.layers.add(layer);
+    layerRef = layer;
+
+    const BASE_ALTITUDE = 23000000;
+    let rotating = false;
+    let hovered  = null;
+
+    (function rotate() {
+      if (rotating && !hovered && !view.interacting) {
+        const cam = view.camera.clone();
+        /* scale rotation speed proportionally to zoom — slower when zoomed in */
+        const scale = Math.min(1, (cam.position.z || BASE_ALTITUDE) / BASE_ALTITUDE);
+        cam.position.longitude -= 0.12 * scale;
+        view.goTo(cam, { animate: false });
+      }
+      requestAnimationFrame(rotate);
+    })();
+
+    view.whenLayerView(layer).then(function (lv) {
+      let hl = null;
+      view.on("pointer-move", function (evt) {
+        view.hitTest(evt).then(function (res) {
+          const hits = res.results.filter(r => r.graphic.layer === layer);
+          if (hl) { hl.remove(); hl = null; }
+
+          if (hits.length > 0) {
+            const g = hits[0].graphic;
+            hovered = g;
+            hl = lv.highlight(g);
+            document.getElementById("viewDiv").style.cursor = "pointer";
+            showCard(g.attributes);
+          } else {
+            hovered = null;
+            document.getElementById("viewDiv").style.cursor = "default";
+            /* card stays visible — user can read and drag it */
+          }
+        });
+      });
+    });
+
+    document.getElementById("explore-btn").addEventListener("click", function () {
+      const ov = document.getElementById("intro-overlay");
+      ov.classList.add("fade-out");
+      setTimeout(() => ov.style.display = "none", 950);
+      document.getElementById("globe-ui").classList.add("visible");
+      rotating = true;
+      initDraggable();
+    });
+  });
+  </script>
+</head>
+<body>
+
+  <!-- ── INTRO OVERLAY ─────────────────────────── -->
+  <div id="intro-overlay">
+    <div id="intro-panel">
+      <div class="un-header">
+        <svg class="un-globe-svg" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="21" stroke="white" stroke-width="1.2" opacity="0.35"/>
+          <ellipse cx="24" cy="24" rx="9.5" ry="21" stroke="white" stroke-width="1.2" opacity="0.35"/>
+          <line x1="3" y1="24" x2="45" y2="24" stroke="white" stroke-width="1.2" opacity="0.35"/>
+          <line x1="5" y1="16" x2="43" y2="16" stroke="white" stroke-width="1"   opacity="0.18"/>
+          <line x1="5" y1="32" x2="43" y2="32" stroke="white" stroke-width="1"   opacity="0.18"/>
+          <circle cx="24" cy="24" r="21" stroke="#009EDB" stroke-width="1.5" opacity="0.65"/>
+        </svg>
+        <div class="un-text-left">
+          <div class="un-org">United Nations</div>
+          <div class="un-dept">Tourism Innovation</div>
+        </div>
+      </div>
+
+      <div class="gold-bar"></div>
+      <h1>Travel Innovation Atlas</h1>
+      <p class="intro-sub">
+        Explore how travel &amp; tourism companies worldwide are deploying
+        breakthrough technology — from AI booking engines to biometric
+        identity and eSIM connectivity — to reshape global tourism.
+      </p>
+
+      <div class="intro-legend" id="intro-legend"></div>
+
+      <button id="explore-btn">Explore the Globe</button>
+      <p class="intro-hint">Hover over markers · Drag the info card · Click to visit websites</p>
+    </div>
+  </div>
+
+  <!-- ── DRAGGABLE INFO CARD ────────────────────── -->
+  <div id="info-card">
+    <div id="ic-handle">
+      <div class="ic-grip">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <span class="ic-category-label"></span>
+      <button id="ic-close" title="Close">✕</button>
+    </div>
+    <div class="ic-body">
+      <div class="ic-name"     id="ic-name"></div>
+      <div class="ic-location" id="ic-location"></div>
+      <div class="ic-tech-tag" id="ic-tech"></div>
+      <div class="ic-label">How They Use AI &amp; Technology</div>
+      <div class="ic-text"     id="ic-text"></div>
+      <div class="ic-impact-box">
+        <div class="ic-impact-label">Global Impact</div>
+        <div class="ic-impact"   id="ic-impact"></div>
+      </div>
+    </div>
+    <div class="ic-footer">
+      <span class="ic-sdg" id="ic-sdg"></span>
+      <a id="ic-website" href="#" target="_blank" rel="noopener">Visit Website</a>
+    </div>
+  </div>
+
+  <!-- ── GLOBE HUD ──────────────────────────────── -->
+  <div id="globe-ui">
+    <div id="globe-title">
+      <div class="un-badge-tag">UN Tourism</div>
+      <h2>Travel Innovation Atlas</h2>
+      <p>127 companies &nbsp;·&nbsp; 50 countries &nbsp;·&nbsp; 6 continents</p>
+    </div>
+    <div id="globe-legend">
+      <div class="legend-heading">Innovation Category</div>
+      <div class="legend-hint">Click to filter</div>
+      <div id="globe-legend-rows"></div>
+      <div id="legend-reset">Show All</div>
+    </div>
+    <div id="globe-footer">
+      127 Travel Innovators &nbsp;·&nbsp; 6 Continents &nbsp;·&nbsp; Reshaping Global Tourism
+    </div>
+  </div>
+
+  <div id="viewDiv"></div>
+</body>
+</html>
